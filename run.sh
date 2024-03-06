@@ -1,8 +1,10 @@
 #!/bin/bash
 
-# check if a file argument was provided
-if [ -z "$1" ]; then
-  echo "Usage: $0 <file>"
+# check if a file argument (the custom menu governor) was provided
+if [ -z "$2" ]; then
+  echo "Usage: $0 <menu governor> <linux kernel version (uname -r)>"
+  echo "example: $0 menu.c linux-5.15.86"
+  echo "find the version in https://cdn.kernel.org/pub/linux/kernel/<number>.x/"
   exit 1
 fi
 
@@ -28,6 +30,8 @@ sudo chmod a+rwx /mydata
 ## Install build tools
 
 sudo apt -y update
+sudo apt-get install bison
+
 printf "\n" | sudo apt-get -y install build-essential linux-source bc kmod cpio flex libncurses5-dev libelf-dev libssl-dev 
 
 ## Obtain kernel source
@@ -35,20 +39,27 @@ printf "\n" | sudo apt-get -y install build-essential linux-source bc kmod cpio 
 cd /mydata
 # wget https://cdn.kernel.org/pub/linux/kernel/v4.x/linux-4.15.18.tar.xz
 #    OR
-wget https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.4.139.tar.xz
+# wget https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.4.139.tar.xz
+
+# Use grep to extract the number
+VERSION=$(echo "$2" | grep -oP '(?<=linux-)\d+')
+
+
+wget https://cdn.kernel.org/pub/linux/kernel/v${VERSION}.x/${2}.tar.xz
 
 # tar -xf linux-4.15.18.tar.xz
 # cd linux-4.15.18
 #    OR 
-tar -xf linux-5.4.139.tar.xz
-cd linux-5.4.139
+tar -xf ${2}.tar.xz
+cd ${2}
 
 
 ## Configure kernel
 
 # You can use an existing .config file a base configuration file
 
-cp /boot/config-4.15.0-169-generic .config
+# CHANGE THIS BASED ON THE CONFIG FILE. e.g. cp /boot/config-5.15.0-86-generic .config
+cp /boot/config* .config
 
 # Edit .config to set the following parameters.
 
@@ -58,6 +69,7 @@ cp /boot/config-4.15.0-169-generic .config
 
 sed -i 's/^CONFIG_LOCALVERSION=.*/CONFIG_LOCALVERSION="-mykernel"/g' .config
 sed -i 's/^CONFIG_SYSTEM_TRUSTED_KEYS=.*/CONFIG_SYSTEM_TRUSTED_KEYS=""/g' .config
+sed -i 's/CONFIG_DEBUG_INFO_BTF.*/# CONFIG_DEBUG_INFO_BTF is not set/' .config
 
 # To disable trusted keys:
 
@@ -65,7 +77,7 @@ sed -i 's/^CONFIG_SYSTEM_TRUSTED_KEYS=.*/CONFIG_SYSTEM_TRUSTED_KEYS=""/g' .confi
 
 
 # copy the file to the destination folder, overwriting any existing file
-cp -f "${current_dir}/$1" /mydata/linux-5.4.139/drivers/cpuidle/governors/menu.c
+cp -f "${current_dir}/$1" /mydata/${2}/drivers/cpuidle/governors/menu.c
 
 # Finally create the configuration:
 
@@ -79,9 +91,8 @@ rm inputtt.txt
 
 ## Build kernel
 
-# For a parallel build, pass the -j flag as follows:
-
-make -j30
+# For a parallel build, pass the -j flag as follows. This runs it with all the threads: 
+make -j$(nproc)
 
 ## Install kernel
 
@@ -91,7 +102,7 @@ sudo make install
 ## Update grub config
 
 sudo update-grub
-sudo reboot
+# sudo reboot
 
 ## Remote boot
 
